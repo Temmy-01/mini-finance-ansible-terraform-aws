@@ -1,0 +1,76 @@
+---
+- name: Install Nginx and Git
+  hosts: web
+  become: true
+
+  tasks:
+    - name: Update apt cache and upgrade all packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install nginx and git
+      apt:
+        name:
+          - nginx
+          - git
+        state: present
+
+    - name: Start and enable nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+- name: Deploy Mini Finance App
+  hosts: web
+  become: true
+
+  tasks:
+    - name: Remove default Nginx index.html if exists
+      file:
+        path: /var/www/html/index.html
+        state: absent
+
+    - name: Clone repo to temporary folder
+      git:
+        repo: https://github.com/pravinmishraaws/mini_finance
+        dest: /tmp/mini-finance
+        version: main
+        force: yes
+        update: yes
+
+    - name: Copy repo contents to web root
+      copy:
+        src: /tmp/mini-finance/
+        dest: /var/www/html/
+        owner: www-data
+        group: www-data
+        mode: '0755'
+        remote_src: yes
+
+    - name: Set permissions for web root
+      file:
+        path: /var/www/html
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Restart Nginx to apply changes
+      service:
+        name: nginx
+        state: restarted
+
+- name: Verify site is up
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Check HTTP response
+      uri:
+        url: "http://54.85.220.184"
+        status_code: 200
+      register: result
+      retries: 5
+      delay: 10
+      until: result.status == 200
